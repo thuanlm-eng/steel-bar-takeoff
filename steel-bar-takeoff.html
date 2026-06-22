@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Steel Bar Takeoff</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/4.1.1/tesseract.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #ffffff; --bg2: #f5f5f3; --bg3: #eeece8;
+    --text: #1a1a18; --text2: #6b6b66; --text3: #9b9b94;
+    --border: rgba(0,0,0,0.12); --border2: rgba(0,0,0,0.22);
+    --radius: 8px; --radius-lg: 12px;
+    --blue-bg: #E6F1FB; --blue-text: #185FA5;
+    --green-bg: #EAF3DE; --green-text: #3B6D11;
+    --amber-bg: #FAEEDA; --amber-text: #854F0B;
+    --red-bg: #FCEBEB; --red-text: #A32D2D;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1c1a; --bg2: #242422; --bg3: #2c2c2a;
+      --text: #e8e8e4; --text2: #a0a09a; --text3: #6b6b66;
+      --border: rgba(255,255,255,0.1); --border2: rgba(255,255,255,0.2);
+      --blue-bg: #0c2a4a; --blue-text: #85B7EB;
+      --green-bg: #132704; --green-text: #97C459;
+      --amber-bg: #2a1800; --amber-text: #EF9F27;
+      --red-bg: #2a0a0a; --red-text: #F09595;
+    }
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg3); color: var(--text); min-height: 100vh; }
+  .topbar { background: var(--bg); border-bottom: 0.5px solid var(--border); padding: 0 2rem; height: 52px; display: flex; align-items: center; gap: 10px; position: sticky; top: 0; z-index: 10; }
+  .topbar h1 { font-size: 16px; font-weight: 500; }
+  .topbar .sub { font-size: 13px; color: var(--text2); }
+  .main { max-width: 960px; margin: 0 auto; padding: 2rem 1.5rem; }
+  .card { background: var(--bg); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 1.25rem 1.5rem; margin-bottom: 1rem; }
+  .section-label { font-size: 12px; font-weight: 500; color: var(--text2); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 10px; }
+  .upload-zone {
+    border: 1.5px dashed var(--border2); border-radius: var(--radius-lg);
+    padding: 2rem 1.5rem; text-align: center; cursor: pointer;
+    transition: background 0.12s; background: var(--bg2); position: relative;
+  }
+  .upload-zone:hover { background: var(--bg3); }
+  .upload-zone.drag-over { border-color: #378ADD; background: var(--blue-bg); }
+  .upload-zone input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+  .upload-icon { font-size: 40px; margin-bottom: 10px; }
+  .upload-zone h3 { font-size: 15px; font-weight: 500; }
+  .upload-zone p { font-size: 13px; color: var(--text2); margin-top: 4px; }
+  .file-pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--bg2); border: 0.5px solid var(--border);
+    border-radius: 20px; padding: 4px 12px; font-size: 13px; margin-top: 10px;
+  }
+  .row { display: flex; gap: 10px; align-items: flex-end; margin-bottom: 1rem; }
+  .row label { display: block; font-size: 13px; color: var(--text2); margin-bottom: 4px; }
+  .row .grow { flex: 1; }
+  input[type=text], input[type=password], select {
+    width: 100%; padding: 0 12px; height: 38px;
+    border: 0.5px solid var(--border2); border-radius: var(--radius);
+    font-size: 14px; background: var(--bg); color: var(--text);
+    outline: none; font-family: inherit;
+  }
+  input[type=text]:focus, input[type=password]:focus, select:focus { border-color: #378ADD; box-shadow: 0 0 0 3px rgba(55,138,221,0.15); }
+  .hint { font-size: 12px; color: var(--text3); margin-top: 4px; }
+  .btn-primary {
+    background: var(--text); color: var(--bg);
+    border: none; border-radius: var(--radius);
+    padding: 0 20px; height: 38px; font-size: 14px;
+    cursor: pointer; white-space: nowrap; display: inline-flex;
+    align-items: center; gap: 6px; font-family: inherit;
+  }
+  .btn-primary:hover { opacity: 0.85; }
+  .btn-primary:disabled { opacity: 0.35; cursor: not-allowed; }
+  .btn-outline {
+    background: transparent; border: 0.5px solid var(--border2);
+    border-radius: var(--radius); padding: 0 14px; height: 34px;
+    font-size: 13px; cursor: pointer; color: var(--text);
+    display: inline-flex; align-items: center; gap: 6px; font-family: inherit;
+  }
+  .btn-outline:hover { background: var(--bg2); }
+  .status-bar {
+    border-radius: var(--radius); padding: 10px 14px;
+    font-size: 13px; display: flex; align-items: center; gap: 8px;
+    margin-bottom: 1rem; background: var(--bg2); color: var(--text2);
+  }
+  .status-bar.success { color: var(--green-text); background: var(--green-bg); }
+  .status-bar.error { color: var(--red-text); background: var(--red-bg); }
+  .status-bar.loading { color: var(--blue-text); background: var(--blue-bg); }
+  .spinner { width: 16px; height: 16px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; flex-shrink: 0; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 1rem; }
+  .metric-card { background: var(--bg2); border-radius: var(--radius); padding: 12px 14px; }
+  .metric-card .mlabel { font-size: 12px; color: var(--text2); margin-bottom: 4px; }
+  .metric-card .mval { font-size: 22px; font-weight: 500; }
+  .metric-card .munit { font-size: 13px; color: var(--text2); }
+  .toolbar { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; flex-wrap: wrap; }
+  .toolbar-right { margin-left: auto; display: flex; gap: 6px; }
+  .search-wrap { position: relative; }
+  .search-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 16px; color: var(--text2); pointer-events: none; }
+  .search-wrap input { padding-left: 34px; width: 200px; }
+  .table-wrap { overflow-x: auto; border: 0.5px solid var(--border); border-radius: var(--radius-lg); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 700px; }
+  thead th { text-align: left; padding: 9px 12px; font-weight: 500; font-size: 12px; color: var(--text2); border-bottom: 0.5px solid var(--border); white-space: nowrap; cursor: pointer; user-select: none; background: var(--bg2); }
+  thead th:hover { color: var(--text); }
+  tbody tr { border-bottom: 0.5px solid var(--border); }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--bg2); }
+  tbody td { padding: 9px 12px; }
+  td.num { font-variant-numeric: tabular-nums; text-align: right; font-family: 'Courier New', monospace; font-size: 12px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 500; }
+  .badge-blue { background: var(--blue-bg); color: var(--blue-text); }
+  .badge-green { background: var(--green-bg); color: var(--green-text); }
+  .badge-amber { background: var(--amber-bg); color: var(--amber-text); }
+  .ocr-toggle { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text2); padding: 8px 0; }
+  .ocr-toggle input[type=checkbox] { width: 16px; height: 16px; cursor: pointer; }
+  .progress-wrap { margin-top: 8px; }
+  .progress-bar-outer { background: var(--bg3); border-radius: 4px; height: 6px; overflow: hidden; margin-top: 4px; }
+  .progress-bar-inner { background: #378ADD; height: 100%; border-radius: 4px; transition: width 0.3s; }
+  .progress-label { font-size: 12px; color: var(--text2); }
+  .empty { text-align: center; padding: 3rem 1rem; color: var(--text2); font-size: 14px; }
+  .sort-icon { font-size: 10px; opacity: 0.5; margin-left: 2px; }
+  .sort-active { opacity: 1; }
+  a.apilink { color: var(--blue-text); font-size: 12px; text-decoration: none; }
+  a.apilink:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <span style="font-size:20px;">📐</span>
+  <h1>Steel Bar Takeoff</h1>
+  <span class="sub">— extract rebar quantities from PDF shop drawings</span>
+</div>
+
+<div class="main">
+
+  <!-- Upload -->
+  <div class="card">
+    <div class="section-label">Shop drawing PDF</div>
+    <div class="upload-zone" id="uploadZone">
+      <input type="file" id="fileInput" accept=".pdf" />
+      <div class="upload-icon">📄</div>
+      <h3>Drop your PDF here or click to browse</h3>
+      <p>Bar bending schedules, reinforcement plans, structural drawings</p>
+    </div>
+    <div id="filePill" style="display:none" class="file-pill">
+      📎 <span id="fileName"></span> <span id="fileSize" style="color:var(--text2)"></span>
+      <button onclick="clearFile()" style="background:none;border:none;cursor:pointer;color:var(--text2);font-size:16px;padding:0;line-height:1;">✕</button>
+    </div>
+  </div>
+
+  <!-- Settings -->
+  <div class="card">
+    <div class="section-label">Settings</div>
+    <div class="row">
+      <div class="grow">
+        <label for="apiKey">Claude API key</label>
+        <input type="password" id="apiKey" placeholder="sk-ant-api03-..." oninput="updateBtn()" />
+        <div class="hint">Get your key at <a class="apilink" href="https://console.anthropic.com" target="_blank">console.anthropic.com</a> &rarr; API Keys</div>
+      </div>
+      <button class="btn-primary" id="extractBtn" disabled onclick="runExtraction()">
+        ⚡ Extract bars
+      </button>
+    </div>
+
+    <div class="ocr-toggle">
+      <input type="checkbox" id="ocrEnabled" checked />
+      <label for="ocrEnabled">Enable OCR for scanned / image-based PDFs (slower but handles scans)</label>
+    </div>
+  </div>
+
+  <!-- Status -->
+  <div id="statusBar" style="display:none" class="status-bar"></div>
+  <div id="progressWrap" style="display:none" class="progress-wrap">
+    <div class="progress-label" id="progressLabel">Processing page 0 of 0...</div>
+    <div class="progress-bar-outer"><div class="progress-bar-inner" id="progressBar" style="width:0%"></div></div>
+  </div>
+
+  <!-- Results -->
+  <div id="results" style="display:none">
+    <div class="metrics" id="metricsRow"></div>
+
+    <!-- Weight summary per diameter -->
+    <div class="card" style="padding:1rem 1.25rem">
+      <div class="section-label" id="summaryLabel">Weight summary by diameter</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Diameter</th>
+              <th style="text-align:right">Bar marks</th>
+              <th style="text-align:right">No. of bars</th>
+              <th style="text-align:right">Total length (m)</th>
+              <th style="text-align:right">Subtotal weight (kg)</th>
+              <th style="text-align:right">% of weight</th>
+            </tr>
+          </thead>
+          <tbody id="summaryBody"></tbody>
+          <tfoot id="summaryFoot"></tfoot>
+        </table>
+      </div>
+    </div>
+
+    <!-- Detailed takeoff -->
+    <div class="card" style="padding:1rem 1.25rem">
+      <div class="toolbar">
+        <div class="search-wrap">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="searchInput" placeholder="Search..." oninput="renderAll()" />
+        </div>
+        <select id="filterDia" onchange="renderAll()" style="width:auto;height:34px;font-size:13px;">
+          <option value="">All diameters</option>
+        </select>
+        <select id="filterZone" onchange="renderAll()" style="width:auto;height:34px;font-size:13px;">
+          <option value="">All zones</option>
+        </select>
+        <label class="ocr-toggle" style="padding:0;gap:6px;">
+          <input type="checkbox" id="groupMarks" checked onchange="renderAll()" />
+          group identical bar marks
+        </label>
+        <div class="toolbar-right">
+          <button class="btn-outline" onclick="copyCSV()">📋 Copy CSV</button>
+          <button class="btn-primary" style="height:34px;font-size:13px;" onclick="downloadXLSX()">⬇ Download Excel</button>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th onclick="sortBy('mark')">Bar mark <span class="sort-icon" id="sort-mark"></span></th>
+              <th onclick="sortBy('diameter')">Dia (mm) <span class="sort-icon" id="sort-diameter"></span></th>
+              <th onclick="sortBy('spacing')" style="text-align:right">Spacing (mm) <span class="sort-icon" id="sort-spacing"></span></th>
+              <th onclick="sortBy('length')" style="text-align:right">Length (mm) <span class="sort-icon" id="sort-length"></span></th>
+              <th onclick="sortBy('count')" style="text-align:right">No. bars <span class="sort-icon" id="sort-count"></span></th>
+              <th onclick="sortBy('totalLength')" style="text-align:right">Total (m) <span class="sort-icon" id="sort-totalLength"></span></th>
+              <th onclick="sortBy('weight')" style="text-align:right">Weight (kg) <span class="sort-icon" id="sort-weight"></span></th>
+              <th>Zone / member</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+        <div id="emptyMsg" class="empty" style="display:none">No bars match your filter.</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+let pdfFile = null;
+let allBars = [];
+let sortKey = '';
+let sortDir = 1;
+
+const uploadZone = document.getElementById('uploadZone');
+const fileInput = document.getElementById('fileInput');
+
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault(); uploadZone.classList.remove('drag-over');
+  const f = e.dataTransfer.files[0];
+  if (f && f.type === 'application/pdf') setFile(f);
+});
+fileInput.addEventListener('change', () => { if (fileInput.files[0]) setFile(fileInput.files[0]); });
+
+function setFile(f) {
+  pdfFile = f;
+  document.getElementById('filePill').style.display = 'inline-flex';
+  document.getElementById('fileName').textContent = f.name;
+  document.getElementById('fileSize').textContent = '(' + (f.size / 1024).toFixed(0) + ' KB)';
+  updateBtn();
+}
+
+function clearFile() {
+  pdfFile = null; fileInput.value = '';
+  document.getElementById('filePill').style.display = 'none';
+  updateBtn();
+}
+
+function updateBtn() {
+  const key = document.getElementById('apiKey').value.trim();
+  document.getElementById('extractBtn').disabled = !(pdfFile && key.length > 20);
+}
+
+function setStatus(msg, type) {
+  const bar = document.getElementById('statusBar');
+  bar.style.display = 'flex';
+  bar.className = 'status-bar ' + (type || '');
+  const icon = type === 'loading' ? '<div class="spinner"></div>' : type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️';
+  bar.innerHTML = icon + ' ' + msg;
+}
+
+function setProgress(label, pct) {
+  const wrap = document.getElementById('progressWrap');
+  wrap.style.display = pct < 100 ? 'block' : 'none';
+  document.getElementById('progressLabel').textContent = label;
+  document.getElementById('progressBar').style.width = pct + '%';
+}
+
+async function extractTextFromPDF(file) {
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  const numPages = pdf.numPages;
+  let fullText = '';
+
+  for (let i = 1; i <= numPages; i++) {
+    setStatus(`Extracting text from page ${i} of ${numPages}...`, 'loading');
+    setProgress(`Page ${i} of ${numPages}`, (i / numPages) * 100);
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    const pageText = content.items.map(it => it.str).join(' ');
+    fullText += `\n--- PAGE ${i} ---\n${pageText}`;
+  }
+  return { text: fullText, pdf };
+}
+
+async function ocrPDF(file, pdf) {
+  const buf = await file.arrayBuffer();
+  const numPages = pdf.numPages;
+  let fullText = '';
+  const worker = await Tesseract.createWorker('eng');
+
+  for (let i = 1; i <= numPages; i++) {
+    setStatus(`OCR scanning page ${i} of ${numPages}...`, 'loading');
+    setProgress(`OCR page ${i} of ${numPages}`, (i / numPages) * 100);
+    const page = await pdf.getPage(i);
+    const viewport = page.getViewport({ scale: 2.5 });
+    const canvas = document.createElement('canvas');
+    canvas.width = viewport.width; canvas.height = viewport.height;
+    const ctx = canvas.getContext('2d');
+    await page.render({ canvasContext: ctx, viewport }).promise;
+    const { data: { text } } = await worker.recognize(canvas);
+    fullText += `\n--- PAGE ${i} (OCR) ---\n${text}`;
+  }
+  await worker.terminate();
+  return fullText;
+}
+
+function calcWeightPerMeter(dia) {
+  return (dia * dia * Math.PI / 4) * 7850 / 1e6;
+}
+
+async function runExtraction() {
+  if (!pdfFile) return;
+  const apiKey = document.getElementById('apiKey').value.trim();
+  const useOCR = document.getElementById('ocrEnabled').checked;
+
+  document.getElementById('extractBtn').disabled = true;
+  document.getElementById('results').style.display = 'none';
+
+  try {
+    setStatus('Reading PDF...', 'loading');
+    const { text: nativeText, pdf } = await extractTextFromPDF(pdfFile);
+
+    let finalText = nativeText;
+    const hasUsefulText = nativeText.replace(/\s/g, '').length > 100;
+
+    if (useOCR && !hasUsefulText) {
+      setStatus('PDF appears image-based, running OCR...', 'loading');
+      const ocrText = await ocrPDF(pdfFile, pdf);
+      finalText = nativeText + '\n' + ocrText;
+    } else if (useOCR && hasUsefulText) {
+      setStatus('Native text found, skipping OCR (uncheck to force OCR)', 'loading');
+    }
+
+    setProgress('', 100);
+    setStatus('Sending to Claude for analysis...', 'loading');
+
+    const prompt = `You are a structural engineering assistant. Analyze the text extracted from a steel reinforcement shop drawing PDF and extract ALL rebar/steel bar data.
+
+ANNOTATION FORMAT USED IN THESE DRAWINGS:
+- A circled number (e.g. ⑮ or (15)) = the bar mark / identifier
+- The annotation next to it follows this pattern: {count}Ø{diameter}a{spacing} L={length}
+  Example: (15) 18Ø14a200 L=4320 means:
+    • Bar mark = 15
+    • count = 18 bars
+    • diameter = 14 mm
+    • spacing = 200 mm (centre-to-centre)
+    • length = 4320 mm
+- Dimensions shown below the bar (e.g. 1500, 2220) are segment lengths that sum to L
+
+Return ONLY valid JSON — a flat array of objects with these exact fields:
+- mark: bar mark / identifier (string, the circled number or label, e.g. "15", "R1", "B2")
+- diameter: bar diameter in mm (number)
+- spacing: centre-to-centre spacing in mm (number, 0 if not applicable e.g. for isolated bars)
+- length: individual bar length in mm (number, value after L=)
+- count: number of bars (integer, the number before Ø)
+- totalLength: total length in meters (number — count × length / 1000)
+- weight: total weight in kg (number — use: weight_per_meter = diameter² × π/4 × 7850 / 1,000,000, weight = weight_per_meter × totalLength)
+- zone: structural element or zone label (string, e.g. "Beam B1", "Slab S1", or "" if unknown)
+
+Rules:
+- Extract EVERY bar annotation found anywhere on the drawing
+- Parse BOTH bar bending schedule tables AND inline callout annotations on plan/section views
+- Be thorough — do not skip any bars
+- Respond ONLY with the JSON array, no markdown code fences, no explanation
+
+PDF TEXT:
+${finalText.slice(0, 18000)}`;
+
+    const servedOverHttp = location.protocol === 'http:' || location.protocol === 'https:';
+    const apiUrl = servedOverHttp ? '/api/extract' : 'https://api.anthropic.com/v1/messages';
+    const headers = {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01'
+    };
+    if (!servedOverHttp) headers['anthropic-dangerous-direct-browser-calls'] = 'true';
+
+    let res;
+    try {
+      res = await fetch(apiUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          model: 'claude-opus-4-8',
+          max_tokens: 8192,
+          messages: [{ role: 'user', content: prompt }]
+        })
+      });
+    } catch (netErr) {
+      if (servedOverHttp) {
+        throw new Error('Could not reach the local server. Make sure server.py is still running in the terminal.');
+      }
+      throw new Error('Failed to fetch — the browser blocked the direct API call. FIX: close this tab, run "python server.py" (or double-click start-takeoff.bat), and use the http://localhost link it opens. That routes the call through a local relay so it works.');
+    }
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error?.message || `API error ${res.status}`);
+    }
+
+    const data = await res.json();
+    const raw = data.content[0].text.trim();
+
+    let parsed;
+    try {
+      const start = raw.indexOf('[');
+      const end = raw.lastIndexOf(']') + 1;
+      parsed = JSON.parse(raw.slice(start, end));
+    } catch (e) {
+      throw new Error('Could not parse response. Raw output: ' + raw.slice(0, 300));
+    }
+
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      throw new Error('No bar data found. Make sure the PDF contains a rebar schedule or reinforcement plan with text content.');
+    }
+
+    allBars = parsed.map((b, i) => {
+      const dia = Number(b.diameter) || 0;
+      const len = Number(b.length) || 0;
+      const cnt = Number(b.count) || 1;
+      const wpm = calcWeightPerMeter(dia);
+      const tl = Number(b.totalLength) || (cnt * len / 1000);
+      const wt = Number(b.weight) || (wpm * tl);
+      return {
+        mark: String(b.mark || ('BAR-' + (i + 1))),
+        diameter: dia,
+        spacing: Number(b.spacing) || 0,
+        length: len,
+        count: cnt,
+        totalLength: tl,
+        weight: wt,
+        zone: String(b.zone || '')
+      };
+    });
+
+    populateFilters();
+    renderAll();
+    document.getElementById('results').style.display = 'block';
+    setStatus(`Done — extracted ${allBars.length} bar entries from "${pdfFile.name}"`, 'success');
+
+  } catch (e) {
+    setStatus(e.message, 'error');
+  }
+
+  document.getElementById('extractBtn').disabled = false;
+  setProgress('', 100);
+}
+
+function populateFilters() {
+  const dias = [...new Set(allBars.map(b => b.diameter).filter(Boolean))].sort((a, b) => a - b);
+  document.getElementById('filterDia').innerHTML = '<option value="">All diameters</option>' +
+    dias.map(d => `<option value="${d}">⌀${d} mm</option>`).join('');
+
+  const zones = [...new Set(allBars.map(b => b.zone).filter(Boolean))].sort();
+  document.getElementById('filterZone').innerHTML = '<option value="">All zones</option>' +
+    zones.map(z => `<option value="${encodeURIComponent(z)}">${esc(z)}</option>`).join('');
+}
+
+function getFiltered() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  const dia = document.getElementById('filterDia').value;
+  const zone = decodeURIComponent(document.getElementById('filterZone').value);
+  return allBars.filter(b => {
+    if (dia && String(b.diameter) !== dia) return false;
+    if (zone && b.zone !== zone) return false;
+    if (q) {
+      const hay = [b.mark, b.diameter, b.spacing, b.length, b.zone].join(' ').toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function sortBy(key) {
+  document.querySelectorAll('.sort-icon').forEach(el => { el.textContent = ''; el.classList.remove('sort-active'); });
+  if (sortKey === key) sortDir *= -1; else { sortKey = key; sortDir = 1; }
+  const icon = document.getElementById('sort-' + key);
+  if (icon) { icon.textContent = sortDir === 1 ? ' ↑' : ' ↓'; icon.classList.add('sort-active'); }
+  renderTable();
+}
+
+// Merge rows that share the same bar mark: sum count / total length / weight.
+function groupByMark(bars) {
+  const map = new Map();
+  for (const b of bars) {
+    const key = String(b.mark).trim().toLowerCase();
+    if (!map.has(key)) {
+      map.set(key, {
+        mark: b.mark, diameter: b.diameter, spacing: b.spacing,
+        length: b.length, count: b.count, totalLength: b.totalLength,
+        weight: b.weight, _lengths: new Set([b.length]),
+        _zones: new Set(b.zone ? [b.zone] : []), _rows: 1
+      });
+    } else {
+      const g = map.get(key);
+      g.count += b.count;
+      g.totalLength += b.totalLength;
+      g.weight += b.weight;
+      g._lengths.add(b.length);
+      if (b.zone) g._zones.add(b.zone);
+      g._rows += 1;
+      if (!g.diameter) g.diameter = b.diameter;
+      if (!g.spacing) g.spacing = b.spacing;
+    }
+  }
+  return [...map.values()].map(g => ({
+    mark: g.mark, diameter: g.diameter, spacing: g.spacing,
+    length: g._lengths.size > 1 ? null : g.length,
+    count: g.count, totalLength: g.totalLength, weight: g.weight,
+    zone: [...g._zones].join(', '), merged: g._rows
+  }));
+}
+
+// Rows currently shown in the detailed table (filtered, optionally grouped, sorted).
+function getDisplayRows() {
+  let rows = getFiltered();
+  if (document.getElementById('groupMarks').checked) rows = groupByMark(rows);
+  if (sortKey) {
+    rows = [...rows].sort((a, b) => {
+      const av = a[sortKey], bv = b[sortKey];
+      if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * sortDir;
+      return String(av).localeCompare(String(bv)) * sortDir;
+    });
+  }
+  return rows;
+}
+
+function renderAll() {
+  renderMetrics();
+  renderDiameterSummary();
+  renderTable();
+}
+
+function renderTable() {
+  const rows = getDisplayRows();
+  const tbody = document.getElementById('tableBody');
+  document.getElementById('emptyMsg').style.display = rows.length === 0 ? 'block' : 'none';
+  tbody.innerHTML = rows.map(b => {
+    const diaCls = b.diameter >= 20 ? 'badge-amber' : b.diameter >= 12 ? 'badge-blue' : 'badge-green';
+    const markTag = b.merged > 1 ? ` <span style="color:var(--text3);font-size:11px">×${b.merged}</span>` : '';
+    return `<tr>
+      <td><strong>${esc(b.mark)}</strong>${markTag}</td>
+      <td><span class="badge ${diaCls}">Ø${b.diameter || '?'}</span></td>
+      <td class="num">${b.spacing ? '@' + b.spacing.toLocaleString() : '—'}</td>
+      <td class="num">${b.length == null ? 'mixed' : (b.length ? b.length.toLocaleString() : '—')}</td>
+      <td class="num">${b.count.toLocaleString()}</td>
+      <td class="num">${b.totalLength.toFixed(2)}</td>
+      <td class="num">${b.weight.toFixed(2)}</td>
+      <td style="color:var(--text2);font-size:12px">${esc(b.zone)}</td>
+    </tr>`;
+  }).join('');
+}
+
+// Aggregate the filtered set by diameter for the summary table.
+function diameterSummary(bars) {
+  const map = new Map();
+  for (const b of bars) {
+    if (!map.has(b.diameter)) map.set(b.diameter, { diameter: b.diameter, marks: new Set(), count: 0, totalLength: 0, weight: 0 });
+    const s = map.get(b.diameter);
+    s.marks.add(String(b.mark).trim().toLowerCase());
+    s.count += b.count;
+    s.totalLength += b.totalLength;
+    s.weight += b.weight;
+  }
+  return [...map.values()].map(s => ({ ...s, markCount: s.marks.size })).sort((a, b) => a.diameter - b.diameter);
+}
+
+function renderDiameterSummary() {
+  const filtered = getFiltered();
+  const summary = diameterSummary(filtered);
+  const grandWeight = summary.reduce((s, r) => s + r.weight, 0) || 1;
+  const dia = document.getElementById('filterDia').value;
+  document.getElementById('summaryLabel').textContent = dia
+    ? `Weight summary — Ø${dia} mm only`
+    : 'Weight summary by diameter';
+
+  document.getElementById('summaryBody').innerHTML = summary.map(r => {
+    const diaCls = r.diameter >= 20 ? 'badge-amber' : r.diameter >= 12 ? 'badge-blue' : 'badge-green';
+    return `<tr>
+      <td><span class="badge ${diaCls}">Ø${r.diameter || '?'} mm</span></td>
+      <td class="num">${r.markCount}</td>
+      <td class="num">${r.count.toLocaleString()}</td>
+      <td class="num">${r.totalLength.toFixed(2)}</td>
+      <td class="num"><strong>${r.weight.toFixed(2)}</strong></td>
+      <td class="num">${(r.weight / grandWeight * 100).toFixed(1)}%</td>
+    </tr>`;
+  }).join('');
+
+  const tCount = summary.reduce((s, r) => s + r.count, 0);
+  const tLen = summary.reduce((s, r) => s + r.totalLength, 0);
+  const tWt = summary.reduce((s, r) => s + r.weight, 0);
+  document.getElementById('summaryFoot').innerHTML = `
+    <tr style="border-top:1.5px solid var(--border2);font-weight:500">
+      <td>Total</td>
+      <td class="num">—</td>
+      <td class="num">${tCount.toLocaleString()}</td>
+      <td class="num">${tLen.toFixed(2)}</td>
+      <td class="num"><strong>${tWt.toFixed(2)} kg</strong></td>
+      <td class="num">100%</td>
+    </tr>`;
+}
+
+function renderMetrics() {
+  const bars = getFiltered();
+  const dia = document.getElementById('filterDia').value;
+  const totalBars = bars.reduce((s, b) => s + b.count, 0);
+  const totalWeight = bars.reduce((s, b) => s + b.weight, 0);
+  const totalLength = bars.reduce((s, b) => s + b.totalLength, 0);
+  const uniqueMarks = new Set(bars.map(b => String(b.mark).trim().toLowerCase())).size;
+  const uniqueDias = new Set(bars.map(b => b.diameter).filter(Boolean)).size;
+
+  const wLabel = totalWeight.toFixed(2) + ' kg';
+  const scope = dia ? `Ø${dia} mm` : 'all bars';
+
+  document.getElementById('metricsRow').innerHTML = `
+    <div class="metric-card"><div class="mlabel">Bar marks</div><div class="mval">${uniqueMarks}</div></div>
+    <div class="metric-card"><div class="mlabel">Total no. of bars</div><div class="mval">${totalBars.toLocaleString()}</div></div>
+    <div class="metric-card"><div class="mlabel">Total length</div><div class="mval">${totalLength.toFixed(2)}<span class="munit"> m</span></div></div>
+    <div class="metric-card" style="background:var(--blue-bg)"><div class="mlabel" style="color:var(--blue-text)">Total weight (${scope})</div><div class="mval" style="color:var(--blue-text)">${wLabel}</div></div>
+    <div class="metric-card"><div class="mlabel">Diameters</div><div class="mval">${uniqueDias}</div></div>
+  `;
+}
+
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function baseName() {
+  return (pdfFile ? pdfFile.name.replace(/\.pdf$/i, '') : 'bar-takeoff');
+}
+
+function getCSV() {
+  const rows = getDisplayRows();
+  const header = 'Bar mark,Diameter (mm),Spacing (mm),Length (mm),No. of bars,Total length (m),Weight (kg),Zone/member\n';
+  const body = rows.map(b =>
+    [b.mark, b.diameter, b.spacing || '', (b.length == null ? 'mixed' : b.length), b.count, b.totalLength.toFixed(2), b.weight.toFixed(2), b.zone]
+      .map(v => '"' + String(v).replace(/"/g, '""') + '"').join(',')
+  ).join('\n');
+  return header + body;
+}
+
+function copyCSV() {
+  navigator.clipboard.writeText(getCSV()).then(() => setStatus('Copied to clipboard', 'success'));
+}
+
+function downloadXLSX() {
+  const wb = XLSX.utils.book_new();
+
+  // Sheet 1 — detailed takeoff (as shown: filtered + grouped)
+  const rows = getDisplayRows();
+  const detail = rows.map(b => ({
+    'Bar mark': b.mark,
+    'Diameter (mm)': b.diameter,
+    'Spacing (mm)': b.spacing || '',
+    'Length (mm)': b.length == null ? 'mixed' : b.length,
+    'No. of bars': b.count,
+    'Total length (m)': +b.totalLength.toFixed(2),
+    'Weight (kg)': +b.weight.toFixed(2),
+    'Zone/member': b.zone
+  }));
+  detail.push({});
+  detail.push({
+    'Bar mark': 'TOTAL',
+    'No. of bars': rows.reduce((s, b) => s + b.count, 0),
+    'Total length (m)': +rows.reduce((s, b) => s + b.totalLength, 0).toFixed(2),
+    'Weight (kg)': +rows.reduce((s, b) => s + b.weight, 0).toFixed(2)
+  });
+  const ws1 = XLSX.utils.json_to_sheet(detail);
+  ws1['!cols'] = [{ wch: 12 }, { wch: 13 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 16 }, { wch: 12 }, { wch: 20 }];
+  XLSX.utils.book_append_sheet(wb, ws1, 'Bar takeoff');
+
+  // Sheet 2 — weight summary by diameter
+  const summary = diameterSummary(getFiltered());
+  const sumRows = summary.map(r => ({
+    'Diameter (mm)': r.diameter,
+    'Bar marks': r.markCount,
+    'No. of bars': r.count,
+    'Total length (m)': +r.totalLength.toFixed(2),
+    'Subtotal weight (kg)': +r.weight.toFixed(2)
+  }));
+  sumRows.push({
+    'Diameter (mm)': 'TOTAL',
+    'No. of bars': summary.reduce((s, r) => s + r.count, 0),
+    'Total length (m)': +summary.reduce((s, r) => s + r.totalLength, 0).toFixed(2),
+    'Subtotal weight (kg)': +summary.reduce((s, r) => s + r.weight, 0).toFixed(2)
+  });
+  const ws2 = XLSX.utils.json_to_sheet(sumRows);
+  ws2['!cols'] = [{ wch: 14 }, { wch: 11 }, { wch: 12 }, { wch: 16 }, { wch: 20 }];
+  XLSX.utils.book_append_sheet(wb, ws2, 'Summary by diameter');
+
+  XLSX.writeFile(wb, baseName() + '.xlsx');
+  setStatus('Excel file downloaded', 'success');
+}
+</script>
+</body>
+</html>

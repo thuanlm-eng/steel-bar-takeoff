@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+
+# OS / OneDrive junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local tooling / editor config
+.claude/
+
+# User data & outputs — do NOT commit client drawings or exports
+*.pdf
+*.xlsx
+*.csv
