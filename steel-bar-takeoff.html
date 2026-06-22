@@ -404,14 +404,16 @@ Rules:
 PDF TEXT:
 ${finalText.slice(0, 18000)}`;
 
-    const servedOverHttp = location.protocol === 'http:' || location.protocol === 'https:';
-    const apiUrl = servedOverHttp ? '/api/extract' : 'https://api.anthropic.com/v1/messages';
+    // Use the local Python relay only when running on localhost (start-takeoff.bat).
+    // When hosted on the web (e.g. GitHub Pages) call Claude directly from the browser.
+    const useRelay = ['localhost', '127.0.0.1'].includes(location.hostname);
+    const apiUrl = useRelay ? '/api/extract' : 'https://api.anthropic.com/v1/messages';
     const headers = {
       'Content-Type': 'application/json',
       'x-api-key': apiKey,
       'anthropic-version': '2023-06-01'
     };
-    if (!servedOverHttp) headers['anthropic-dangerous-direct-browser-calls'] = 'true';
+    if (!useRelay) headers['anthropic-dangerous-direct-browser-calls'] = 'true';
 
     let res;
     try {
@@ -425,10 +427,13 @@ ${finalText.slice(0, 18000)}`;
         })
       });
     } catch (netErr) {
-      if (servedOverHttp) {
+      if (useRelay) {
         throw new Error('Could not reach the local server. Make sure server.py is still running in the terminal.');
       }
-      throw new Error('Failed to fetch — the browser blocked the direct API call. FIX: close this tab, run "python server.py" (or double-click start-takeoff.bat), and use the http://localhost link it opens. That routes the call through a local relay so it works.');
+      if (location.protocol === 'file:') {
+        throw new Error('Failed to fetch — opening the file directly is blocked. Run start-takeoff.bat and use the http://localhost link, or use the hosted web version.');
+      }
+      throw new Error('Failed to fetch — the request to Claude was blocked (network, firewall, or browser extension). Check your internet connection and that the API key is correct, then try again.');
     }
 
     if (!res.ok) {
